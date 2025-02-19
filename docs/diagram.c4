@@ -1,0 +1,80 @@
+specification {
+    element person {
+        style {
+            shape person
+            color green
+        }
+    }
+    element softwareSystem
+    element container
+    element component
+}
+
+model {
+  user = person "Пользователь" "Зарегистрированный пользователь социальной сети"
+
+  socialNetwork = softwareSystem "Социальная сеть" {
+    apiGateway = container "API Gateway" {
+      description "Принимает запросы от UI и перенаправляет их в соответствующие сервисы"
+    }
+
+    userService = container "User Service" {
+      description "Регистрация, аутентификация и хранение информации о пользователях"
+    }
+
+    postService = container "Post & Comment Service" {
+      description "Создание, обновление, удаление постов и комментариев"
+    }
+
+    statsService = container "Statistics Service" {
+      description "Подсчет лайков, просмотров, комментариев и аналитика"
+    }
+
+    postgresUsers = container "PostgreSQL (Users)" {
+      description "Хранение данных пользователей"
+      technology "Database"
+    }
+    
+    postgresPosts = container "PostgreSQL (Posts)" {
+      description "Хранение постов и комментариев"
+      technology "Database"
+    }
+
+    clickhouseStats = container "ClickHouse (Statistics)" {
+      description "Хранение статистики постов (лайки, просмотры, комментарии)"
+      technology "Database"
+    }
+    
+    kafka = container "Kafka" {
+      description "Брокер сообщений для событий (лайки, просмотры, комментарии)"
+      technology "Message Broker"
+      style {
+        shape queue
+      }
+    }
+  }
+
+  user -> socialNetwork.apiGateway "Использует" "HTTPS"
+
+  socialNetwork.apiGateway -> socialNetwork.userService "Запросы на регистрацию и аутентификацию" "REST API"
+  socialNetwork.apiGateway -> socialNetwork.postService "Запросы на управление постами и комментариями" "REST API"
+  socialNetwork.apiGateway -> socialNetwork.statsService "Запросы статистики" "REST API"
+
+  socialNetwork.userService -> socialNetwork.postgresUsers "Читает/Пишет" "SQL"
+
+  socialNetwork.postService -> socialNetwork.postgresPosts "Читает/Пишет" "SQL"
+
+  socialNetwork.statsService -> socialNetwork.clickhouseStats "Читает/Пишет" "SQL"
+
+  socialNetwork.postService -> socialNetwork.kafka "Публикует события (создание поста, лайк, комментарий)"
+  socialNetwork.userService -> socialNetwork.kafka "Публикует события регистрации"
+  socialNetwork.kafka -> socialNetwork.statsService "Передает события для анализа"
+
+  socialNetwork.statsService -> socialNetwork.apiGateway "Предоставляет данные статистики" "REST API"
+}
+
+views {
+   view index {
+        include *
+    }
+}
