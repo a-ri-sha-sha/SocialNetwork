@@ -11,54 +11,47 @@ specification {
 }
 
 model {
-    user = person "Пользователь" "Зарегистрированный пользователь социальной сети"
+  user = person "Пользователь" "Зарегистрированный пользователь социальной сети"
 
-    socialNetwork = softwareSystem "Социальная сеть" {
-        apiGateway = container "API Gateway" {
-        description "Принимает запросы от UI и перенаправляет их в соответствующие сервисы"
+  socialNetwork = softwareSystem "Социальная сеть" {
+    apiGateway = container "API Gateway" {
+      description "Принимает запросы от UI и перенаправляет их в соответствующие сервисы"
     }
 
     userService = container "User Service" {
-        description "Регистрация, аутентификация и хранение информации о пользователях"
+      description "Регистрация, аутентификация и хранение информации о пользователях"
     }
 
     postService = container "Post & Comment Service" {
-        description "Создание, обновление, удаление постов и комментариев"
+      description "Создание, обновление, удаление постов и комментариев"
     }
 
     statsService = container "Statistics Service" {
-        description "Подсчет лайков, просмотров, комментариев и аналитика"
+      description "Подсчет лайков, просмотров, комментариев и аналитика"
     }
 
     postgresUsers = container "PostgreSQL (Users)" {
-        description "Хранение данных пользователей"
+      description "Хранение данных пользователей"
+      technology "Database"
     }
     
     postgresPosts = container "PostgreSQL (Posts)" {
-        description "Хранение постов и комментариев"
+      description "Хранение постов и комментариев"
+      technology "Database"
     }
 
     clickhouseStats = container "ClickHouse (Statistics)" {
-        description "Хранение статистики постов (лайки, просмотры, комментарии)"
+      description "Хранение статистики постов (лайки, просмотры, комментарии)"
+      technology "Database"
     }
     
     kafka = container "Kafka" {
-        description "Брокер сообщений для событий (лайки, просмотры, комментарии)"
-        technology "Message Broker"
-        style {
-            shape queue
-        }
+      description "Брокер сообщений для событий (лайки, просмотры, комментарии)"
+      technology "Message Broker"
+      style {
+        shape queue
+      }
     }
-    
-    redis = container "Redis" {
-        description "Кэширование сессий пользователей"
-        technology "In-memory data store"
-      }
-  
-      postgresGatewayLogs = container "PostgreSQL (Gateway Logs)" {
-        description "Хранение логов запросов API Gateway"
-        technology "Database"
-      }
   }
 
   user -> socialNetwork.apiGateway "Использует" "HTTPS"
@@ -72,9 +65,6 @@ model {
   socialNetwork.postService -> socialNetwork.postgresPosts "Читает/Пишет" "SQL"
 
   socialNetwork.statsService -> socialNetwork.clickhouseStats "Читает/Пишет" "SQL"
-
-  socialNetwork.apiGateway -> socialNetwork.redis "Хранит сессии" "Redis Protocol"
-  socialNetwork.apiGateway -> socialNetwork.postgresGatewayLogs "Логирует запросы" "SQL"
 
   socialNetwork.postService -> socialNetwork.kafka "Публикует события (создание поста, лайк, комментарий)"
   socialNetwork.userService -> socialNetwork.kafka "Публикует события регистрации"

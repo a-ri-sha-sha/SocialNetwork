@@ -28,7 +28,7 @@ package "User Service (PostgreSQL)" {
         session_token: VARCHAR(255) UNIQUE
         expires_at: TIMESTAMP
         created_at: TIMESTAMP
-        ip_address: VARCHAR(45)  ' Новый атрибут
+        ip_address: VARCHAR(45)
     }
 
     USER ||--|| PROFILE : "has"
@@ -86,7 +86,7 @@ package "Statistics Service (ClickHouse)" {
         PRIMARY_KEY comment_id: INT
         likes: INT
         replies: INT
-        shares: INT  ' Новый атрибут для учета репостов
+        shares: INT
         updated_at: TIMESTAMP
     }
 
@@ -94,34 +94,4 @@ package "Statistics Service (ClickHouse)" {
     COMMENT ||--|| COMMENT_STATS : "has"
     USER ||--|{ USER_ACTIVITY : "performs"
 }
-
-package "API Gateway (PostgreSQL + Redis)" {
-    entity REQUEST_LOG {
-        PRIMARY_KEY id: INT
-        FOREIGN_KEY user_id: INT
-        endpoint: VARCHAR(255)
-        method: VARCHAR(50)
-        timestamp: TIMESTAMP
-    }
-
-    entity CACHE_SESSION {
-        PRIMARY_KEY user_id: INT
-        session_token: VARCHAR(255)
-        expires_at: TIMESTAMP
-        last_active: TIMESTAMP  ' Новый атрибут для отслеживания активности пользователя
-    }
-
-    entity RATE_LIMIT {
-        PRIMARY_KEY id: INT
-        FOREIGN_KEY user_id: INT
-        requests_count: INT
-        time_window: TIMESTAMP
-        created_at: TIMESTAMP
-    }
-
-    USER ||--|{ REQUEST_LOG : "makes"
-    USER ||--|{ CACHE_SESSION : "has"
-    USER ||--|{ RATE_LIMIT : "rate limits"
-}
-
 @enduml
