@@ -1,0 +1,97 @@
+@startuml
+' ER-диаграмма для социальной сети
+
+!define PRIMARY_KEY <b>
+!define FOREIGN_KEY <u>
+
+package "User Service (PostgreSQL)" {
+    entity USER {
+        PRIMARY_KEY id: INT
+        username: VARCHAR(255) UNIQUE
+        email: VARCHAR(255) UNIQUE
+        password_hash: VARCHAR(255)
+        created_at: TIMESTAMP
+    }
+
+    entity PROFILE {
+        PRIMARY_KEY id: INT
+        FOREIGN_KEY user_id: INT
+        full_name: VARCHAR(255)
+        bio: TEXT
+        avatar_url: VARCHAR(255)
+        updated_at: TIMESTAMP
+    }
+
+    entity SESSION {
+        PRIMARY_KEY id: INT
+        FOREIGN_KEY user_id: INT
+        session_token: VARCHAR(255) UNIQUE
+        expires_at: TIMESTAMP
+        created_at: TIMESTAMP
+        ip_address: VARCHAR(45)
+    }
+
+    USER ||--|| PROFILE : "has"
+    USER ||--|{ SESSION : "has"
+}
+
+package "Post & Comment Service (PostgreSQL)" {
+    entity POST {
+        PRIMARY_KEY id: INT
+        FOREIGN_KEY user_id: INT
+        content: TEXT
+        created_at: TIMESTAMP
+        updated_at: TIMESTAMP
+    }
+
+    entity COMMENT {
+        PRIMARY_KEY id: INT
+        FOREIGN_KEY post_id: INT
+        FOREIGN_KEY user_id: INT
+        content: TEXT
+        created_at: TIMESTAMP
+    }
+
+    entity COMMENT_REPLY {
+        PRIMARY_KEY id: INT
+        FOREIGN_KEY comment_id: INT
+        FOREIGN_KEY user_id: INT
+        content: TEXT
+        created_at: TIMESTAMP
+    }
+
+    USER ||--|{ POST : "writes"
+    POST ||--|{ COMMENT : "has"
+    COMMENT ||--|{ COMMENT_REPLY : "replies to"
+}
+
+package "Statistics Service (ClickHouse)" {
+    entity POST_STATS {
+        PRIMARY_KEY post_id: INT
+        likes: INT
+        views: INT
+        comments: INT
+        updated_at: TIMESTAMP
+    }
+
+    entity USER_ACTIVITY {
+        PRIMARY_KEY id: INT
+        FOREIGN_KEY user_id: INT
+        FOREIGN_KEY post_id: INT
+        action_type: VARCHAR(50)
+        action_time: TIMESTAMP
+    }
+
+    entity COMMENT_STATS {
+        PRIMARY_KEY comment_id: INT
+        likes: INT
+        replies: INT
+        shares: INT
+        updated_at: TIMESTAMP
+    }
+
+    POST ||--|| POST_STATS : "has"
+    COMMENT ||--|| COMMENT_STATS : "has"
+    USER ||--|{ USER_ACTIVITY : "performs"
+}
+@enduml
