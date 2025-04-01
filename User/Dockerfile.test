@@ -3,10 +3,9 @@ FROM python:3.12
 WORKDIR /app
 
 COPY requirements.txt .
-COPY proxy_service.py .
-
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install pytest
 
 COPY . .
 
-CMD ["python", "proxy_service.py"]
+CMD ["pytest", "tests"]
