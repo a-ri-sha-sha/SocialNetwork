@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:latest
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_DB: users_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  user_service:
+    build: ./User
+    container_name: user_service
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/users_db
+    ports:
+      - "5001:5001"
+
+  api_gateway:
+    build: ./API Gateway
+    container_name: api_gateway
+    restart: always
+    depends_on:
+      - user_service
+    ports:
+      - "5000:5000"
+
+volumes:
+  pg_data:
