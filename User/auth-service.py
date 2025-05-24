@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:password@db:5432/users_db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:password@users_db:5432/users_db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret') 
 db = SQLAlchemy(app)
@@ -52,34 +52,38 @@ def login():
         return jsonify({'error': 'Invalid credentials'}), 401
     
     token = jwt.encode({'username': user.username}, app.config['SECRET_KEY'], algorithm='HS256')
-    response = make_response(jsonify({"message": "User registered successfully"}), 200)
-    response.set_cookie("jwt", token)
-    return response
+
+    return jsonify({"token": token}), 200
 
 @app.route('/profile', methods=['GET'])
 def profile():
-    token = request.cookies.get("jwt")
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({'error': 'Token is missing'}), 401
+    
     try:
         data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user = Users.query.filter_by(username=data['username']).first()
         if not user:
-            return jsonify({'error': 'Users not found'}), 404
+            return jsonify({'error': 'User not found'}), 404
+
         return jsonify({
+            'id': user.id,
             'username': user.username,
             'email': user.email,
             'first_name': user.first_name,
             'last_name': user.last_name,
             'birth_date': user.birth_date,
             'phone': user.phone,
-            'created_at': user.created_at,
-            'updated_at': user.updated_at
+            'created_at': str(user.created_at),
+            'updated_at': str(user.updated_at)
         })
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Token expired'}), 401
-    
     except jwt.InvalidTokenError:
-        # return jsonify({'error': 'Invalid token'}), 401
-        pass
+        return jsonify({'error': 'Invalid token'}), 401
+    except Exception as e:
+        return jsonify({'error': f'An error occurred: {str(e)}'}), 500
 
 @app.route('/profile', methods=['PUT'])
 def update_profile():
