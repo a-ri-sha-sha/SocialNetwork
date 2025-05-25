@@ -4,9 +4,11 @@ from concurrent import futures
 import post_service_pb2
 import post_service_pb2_grpc
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, ARRAY
+from sqlalchemy import and_, or_, func
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
-from database import Post, Session, init_db
+from database import Post, Session, init_db, Comment, PostView, PostLike
+from kafka_producer import send_post_view_event, send_post_like_event, send_post_comment_event
 import os
 
 class PostServicer(post_service_pb2_grpc.PostServiceServicer):
@@ -186,6 +188,183 @@ class PostServicer(post_service_pb2_grpc.PostServiceServicer):
         finally:
             session.close()
 
+    def ViewPost(self, request, context):
+        session = Session()
+        try:
+            post = session.query(Post).filter(Post.id == request.post_id).first()
+            
+            if not post:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(f"Post with ID {request.post_id} not found")
+                return post_service_pb2.ViewPostResponse(success=False, views_count=0)
+
+            existing_view = session.query(PostView).filter(
+                PostView.post_id == request.post_id,
+                PostView.user_id == request.user_id
+            ).first()
+            
+            if not existing_view:
+                new_view = PostView(post_id=request.post_id, user_id=request.user_id)
+                session.add(new_view)
+
+                post.views_count += 1
+                
+                session.commit()
+
+                send_post_view_event(request.user_id, request.post_id, new_view.viewed_at)
+            
+            return post_service_pb2.ViewPostResponse(
+                success=True,
+                views_count=post.views_count
+            )
+        except Exception as e:
+            session.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Error viewing post: {str(e)}")
+            return post_service_pb2.ViewPostResponse(success=False, views_count=0)
+        finally:
+            session.close()
+    
+    def LikePost(self, request, context):
+        session = Session()
+        try:
+            post = session.query(Post).filter(Post.id == request.post_id).first()
+            
+            if not post:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(f"Post with ID {request.post_id} not found")
+                return post_service_pb2.LikePostResponse(success=False, likes_count=0)
+
+            existing_like = session.query(PostLike).filter(
+                PostLike.post_id == request.post_id,
+                PostLike.user_id == request.user_id
+            ).first()
+            
+            if existing_like:
+                if existing_like.is_like != request.is_like:
+                    existing_like.is_like = request.is_like
+
+                    if request.is_like:
+                        post.likes_count += 2
+                    else:
+                        post.likes_count -= 2
+                    
+                    send_post_like_event(request.user_id, request.post_id, request.is_like)
+            else:
+                new_like = PostLike(
+                    post_id=request.post_id,
+                    user_id=request.user_id,
+                    is_like=request.is_like
+                )
+                session.add(new_like)
+
+                if request.is_like:
+                    post.likes_count += 1
+                else:
+                    post.likes_count -= 1
+                
+                send_post_like_event(request.user_id, request.post_id, request.is_like)
+            
+            session.commit()
+            
+            return post_service_pb2.LikePostResponse(
+                success=True,
+                likes_count=post.likes_count
+            )
+        except Exception as e:
+            session.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Error liking post: {str(e)}")
+            return post_service_pb2.LikePostResponse(success=False, likes_count=0)
+        finally:
+            session.close()
+
+    def CommentPost(self, request, context):
+        session = Session()
+        try:
+            post = session.query(Post).filter(Post.id == request.post_id).first()
+            
+            if not post:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(f"Post with ID {request.post_id} not found")
+                return post_service_pb2.Comment()
+
+            new_comment = Comment(
+                post_id=request.post_id,
+                user_id=request.user_id,
+                text=request.text
+            )
+            session.add(new_comment)
+            session.commit()
+
+            send_post_comment_event(
+                request.user_id,
+                request.post_id,
+                new_comment.id,
+                new_comment.created_at
+            )
+            
+            return post_service_pb2.Comment(
+                id=new_comment.id,
+                post_id=new_comment.post_id,
+                user_id=new_comment.user_id,
+                text=new_comment.text,
+                created_at=new_comment.created_at.isoformat()
+            )
+        except Exception as e:
+            session.rollback()
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Error commenting on post: {str(e)}")
+            return post_service_pb2.Comment()
+        finally:
+            session.close()
+    
+    def GetPostComments(self, request, context):
+        session = Session()
+        try:
+            post = session.query(Post).filter(Post.id == request.post_id).first()
+            
+            if not post:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                context.set_details(f"Post with ID {request.post_id} not found")
+                return post_service_pb2.GetPostCommentsResponse()
+
+            page = max(1, request.page)
+            per_page = min(max(1, request.per_page), 100)
+
+            total = session.query(func.count(Comment.id)).filter(Comment.post_id == request.post_id).scalar()
+            
+            comments = session.query(Comment).filter(
+                Comment.post_id == request.post_id
+            ).order_by(
+                Comment.created_at.desc()
+            ).offset(
+                (page - 1) * per_page
+            ).limit(per_page).all()
+
+            comment_list = []
+            for comment in comments:
+                comment_list.append(post_service_pb2.Comment(
+                    id=comment.id,
+                    post_id=comment.post_id,
+                    user_id=comment.user_id,
+                    text=comment.text,
+                    created_at=comment.created_at.isoformat()
+                ))
+            
+            return post_service_pb2.GetPostCommentsResponse(
+                comments=comment_list,
+                total=total,
+                page=page,
+                per_page=per_page
+            )
+        except Exception as e:
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Error getting post comments: {str(e)}")
+            return post_service_pb2.GetPostCommentsResponse()
+        finally:
+            session.close()
+        
 def serve():
     init_db()
 

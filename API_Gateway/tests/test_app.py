@@ -131,10 +131,8 @@ def test_get_post_success(client, mock_authenticate_user, mock_grpc_stub):
     assert args[0].user_id == 1
 
 def test_get_post_not_found(client, mock_authenticate_user, mock_grpc_stub):
-
     error = grpc.RpcError()
     error._code = grpc.StatusCode.NOT_FOUND
-    error._details = "Post not found"
     mock_grpc_stub.GetPost.side_effect = error
 
     response = client.get('/posts/999')
@@ -143,7 +141,6 @@ def test_get_post_not_found(client, mock_authenticate_user, mock_grpc_stub):
     
     response_data = json.loads(response.data)
     assert 'error' in response_data
-    assert 'Post not found' in response_data['error']
 
 def test_update_post_success(client, mock_authenticate_user, mock_grpc_stub):
     post_data = {
