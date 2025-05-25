@@ -4,7 +4,9 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install pytest pytest-cov
+RUN pip install pytest pytest-cov pytest-mock
+
+RUN mkdir -p proto
 
 COPY proto/ ./proto/
 

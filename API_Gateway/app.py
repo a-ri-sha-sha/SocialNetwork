@@ -146,15 +146,17 @@ def get_post(post_id):
         return jsonify(post_data), 200
     
     except grpc.RpcError as e:
-        status_code = e._code
+        try:
+            status_code = e.code()
+        except AttributeError:
+            status_code = e._code
         
         if status_code == grpc.StatusCode.NOT_FOUND:
             return jsonify({'error': 'Post not found'}), 404
         elif status_code == grpc.StatusCode.PERMISSION_DENIED:
             return jsonify({'error': 'You do not have permission to view this post'}), 403
         else:
-            error_details = str(e)
-            return jsonify({'error': error_details}), 500
+            return jsonify({'error': str(e)}), 500
 
 @app.route('/posts/<int:post_id>', methods=['PUT'])
 def update_post(post_id):
@@ -274,6 +276,145 @@ def list_posts():
     except grpc.RpcError as e:
         return jsonify({'error': str(e.details())}), 500
 
+@app.route('/posts/<int:post_id>/view', methods=['POST'])
+def view_post(post_id):
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+    
+    try:
+        stub = get_post_service_stub()
+        grpc_request = post_service_pb2.ViewPostRequest(
+            post_id=post_id,
+            user_id=user_data['id']
+        )
+        
+        response = stub.ViewPost(grpc_request)
+        
+        return jsonify({
+            'success': response.success,
+            'views_count': response.views_count
+        }), 200
+    
+    except grpc.RpcError as e:
+        status_code = e.code()
+        
+        if status_code == grpc.StatusCode.NOT_FOUND:
+            return jsonify({'error': 'Post not found'}), 404
+        else:
+            return jsonify({'error': str(e)}), 500
+
+@app.route('/posts/<int:post_id>/like', methods=['POST'])
+def like_post(post_id):
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+    
+    data = request.get_json()
+    is_like = data.get('is_like', True)
+    
+    try:
+        stub = get_post_service_stub()
+        grpc_request = post_service_pb2.LikePostRequest(
+            post_id=post_id,
+            user_id=user_data['id'],
+            is_like=is_like
+        )
+        
+        response = stub.LikePost(grpc_request)
+        
+        return jsonify({
+            'success': response.success,
+            'likes_count': response.likes_count
+        }), 200
+    
+    except grpc.RpcError as e:
+        status_code = e.code()
+        
+        if status_code == grpc.StatusCode.NOT_FOUND:
+            return jsonify({'error': 'Post not found'}), 404
+        else:
+            return jsonify({'error': str(e)}), 500
+
+@app.route('/posts/<int:post_id>/comments', methods=['POST'])
+def comment_post(post_id):
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+    
+    data = request.get_json()
+    if not data.get('text'):
+        return jsonify({'error': 'Comment text is required'}), 400
+    
+    try:
+        stub = get_post_service_stub()
+        grpc_request = post_service_pb2.CommentPostRequest(
+            post_id=post_id,
+            user_id=user_data['id'],
+            text=data.get('text')
+        )
+        
+        response = stub.CommentPost(grpc_request)
+        
+        return jsonify({
+            'id': response.id,
+            'post_id': response.post_id,
+            'user_id': response.user_id,
+            'text': response.text,
+            'created_at': response.created_at
+        }), 201
+    
+    except grpc.RpcError as e:
+        status_code = e.code()
+        
+        if status_code == grpc.StatusCode.NOT_FOUND:
+            return jsonify({'error': 'Post not found'}), 404
+        else:
+            return jsonify({'error': str(e)}), 500
+
+@app.route('/posts/<int:post_id>/comments', methods=['GET'])
+def get_post_comments(post_id):
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+    
+    try:
+        stub = get_post_service_stub()
+        grpc_request = post_service_pb2.GetPostCommentsRequest(
+            post_id=post_id,
+            page=page,
+            per_page=per_page
+        )
+        
+        response = stub.GetPostComments(grpc_request)
+        
+        comments = []
+        for comment in response.comments:
+            comments.append({
+                'id': comment.id,
+                'post_id': comment.post_id,
+                'user_id': comment.user_id,
+                'text': comment.text,
+                'created_at': comment.created_at
+            })
+        
+        return jsonify({
+            'comments': comments,
+            'total': response.total,
+            'page': response.page,
+            'per_page': response.per_page
+        }), 200
+    
+    except grpc.RpcError as e:
+        status_code = e.code()
+        
+        if status_code == grpc.StatusCode.NOT_FOUND:
+            return jsonify({'error': 'Post not found'}), 404
+        else:
+            return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

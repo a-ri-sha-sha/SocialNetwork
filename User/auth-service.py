@@ -5,6 +5,9 @@ from datetime import datetime
 import jwt
 import os
 from dotenv import load_dotenv
+from confluent_kafka import Producer
+import json
+import socket
 
 load_dotenv()
 
@@ -13,6 +16,38 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:password@users_db
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret') 
 db = SQLAlchemy(app)
+
+def create_kafka_producer():
+    conf = {
+        'bootstrap.servers': 'kafka:29092',
+        'client.id': socket.gethostname()
+    }
+    return Producer(conf)
+
+kafka_producer = create_kafka_producer()
+
+
+def send_registration_event(user_id, registration_date):
+    try:
+        message = {
+            'user_id': user_id,
+            'registration_date': registration_date.isoformat(),
+            'event_time': datetime.utcnow().isoformat()
+        }
+
+        message_json = json.dumps(message)
+
+        kafka_producer.produce(
+            topic='user-registrations',
+            key=str(user_id),
+            value=message_json,
+            callback=lambda err, msg: print(f"Message delivered: {msg}" if err is None else f"Failed to deliver message: {err}")
+        )
+        
+        kafka_producer.poll(0)
+        
+    except Exception as e:
+        print(f"Error sending message to Kafka: {e}")
 
 class Users(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -39,10 +74,13 @@ def register():
     new_user = Users(
         username=data['username'], email=data['email'], password_hash=hashed_password
     )
-    token = jwt.encode({'username': new_user.username}, app.config['SECRET_KEY'], algorithm='HS256')
     db.session.add(new_user)
     db.session.commit()
-    return jsonify({'message': 'Users registered successfully'}), 201
+
+    send_registration_event(new_user.id, new_user.created_at)
+    
+    token = jwt.encode({'username': new_user.username}, app.config['SECRET_KEY'], algorithm='HS256')
+    return jsonify({"token": token, "message": "User registered successfully"}), 201
 
 @app.route('/login', methods=['POST'])
 def login():
