@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package stats;
+
+service StatsService {
+  rpc GetPostStats(PostStatsRequest) returns (PostStatsResponse);
+  
+  rpc GetPostViewsDynamics(PostDynamicsRequest) returns (PostDynamicsResponse);
+  
+  rpc GetPostLikesDynamics(PostDynamicsRequest) returns (PostDynamicsResponse);
+  
+  rpc GetPostCommentsDynamics(PostDynamicsRequest) returns (PostDynamicsResponse);
+  
+  rpc GetTopPosts(TopRequest) returns (TopPostsResponse);
+  
+  rpc GetTopUsers(TopRequest) returns (TopUsersResponse);
+}
+
+message PostStatsRequest {
+  int32 post_id = 1;
+}
+
+message PostStatsResponse {
+  int32 post_id = 1;
+  int32 views_count = 2;
+  int32 likes_count = 3;
+  int32 comments_count = 4;
+}
+
+message PostDynamicsRequest {
+  int32 post_id = 1;
+  string start_date = 2;
+  string end_date = 3;
+}
+
+message PostDynamicsResponse {
+  int32 post_id = 1;
+  repeated DailyStats daily_stats = 2;
+}
+
+message DailyStats {
+  string date = 1;
+  int32 count = 2;
+}
+
+message TopRequest {
+  enum MetricType {
+    VIEWS = 0;
+    LIKES = 1;
+    COMMENTS = 2;
+  }
+  MetricType metric_type = 1;
+  int32 limit = 2;
+}
+
+message TopPostsResponse {
+  repeated PostStats posts = 1;
+}
+
+message PostStats {
+  int32 post_id = 1;
+  int32 count = 2;
+}
+
+message TopUsersResponse {
+  repeated UserStats users = 1;
+}
+
+message UserStats {
+  int32 user_id = 1;
+  int32 count = 2;
+}

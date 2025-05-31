@@ -2,6 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -10,9 +17,7 @@ RUN mkdir -p proto
 COPY proto/ ./proto/
 
 COPY *.py .
-COPY openapi.yaml .
 
-RUN python -m grpc_tools.protoc -I./proto --python_out=. --grpc_python_out=. ./proto/post_service.proto
 RUN python -m grpc_tools.protoc -I./proto --python_out=. --grpc_python_out=. ./proto/stats_service.proto
 
-CMD ["python", "app.py"]
+CMD ["python", "stats_service.py"]

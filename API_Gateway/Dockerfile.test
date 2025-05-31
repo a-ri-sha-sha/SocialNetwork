@@ -15,5 +15,6 @@ COPY openapi.yaml .
 COPY tests/ ./tests/
 
 RUN python -m grpc_tools.protoc -I./proto --python_out=. --grpc_python_out=. ./proto/post_service.proto
+RUN python -m grpc_tools.protoc -I./proto --python_out=. --grpc_python_out=. ./proto/stats_service.proto
 
 CMD ["pytest", "tests/", "-v", "--cov=."]

@@ -136,9 +136,49 @@ services:
     networks:
       - app_network
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse-init:/docker-entrypoint-initdb.d
+    networks:
+      - app_network
+
+  stats_service:
+    build: ./Stats_Service
+    container_name: stats_service
+    restart: always
+    depends_on:
+      - kafka
+      - clickhouse
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "50053:50053"
+    networks:
+      - app_network
+
+  stats_service_tests:
+    build:
+      context: ./Stats_Service
+      dockerfile: Dockerfile.test
+    container_name: stats_service_tests
+    depends_on:
+      - stats_service
+    networks:
+      - app_network
 volumes:
   users_pg_data:
   posts_pg_data:
+  clickhouse_data:
 
 networks:
   app_network:

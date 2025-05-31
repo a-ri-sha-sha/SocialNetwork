@@ -6,19 +6,26 @@ import jwt
 import post_service_pb2
 import post_service_pb2_grpc
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+import stats_service_pb2
+import stats_service_pb2_grpc
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default_secret_key')
 
 SERVICES = {
     "user": os.environ.get("USER_SERVICE_URL", "http://user_service:5001"),
-    "post": os.environ.get("POST_SERVICE_URL", "post_service:50051")
+    "post": os.environ.get("POST_SERVICE_URL", "post_service:50052"),
+    "stats": os.environ.get("STATS_SERVICE_URL", "stats_service:50053")
 }
 
 def get_post_service_stub():
     channel = grpc.insecure_channel(SERVICES["post"])
     return post_service_pb2_grpc.PostServiceStub(channel)
+
+def get_stats_service_stub():
+    channel = grpc.insecure_channel(SERVICES["stats"])
+    return stats_service_pb2_grpc.StatsServiceStub(channel)
 
 def authenticate_user(request):
     token = request.headers.get('Authorization')
@@ -415,6 +422,238 @@ def get_post_comments(post_id):
             return jsonify({'error': 'Post not found'}), 404
         else:
             return jsonify({'error': str(e)}), 500
+
+@app.route('/stats/posts/<int:post_id>', methods=['GET'])
+def get_post_stats(post_id):
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+    
+    try:
+        stub = get_stats_service_stub()
+        grpc_request = stats_service_pb2.PostStatsRequest(
+            post_id=post_id
+        )
+        
+        response = stub.GetPostStats(grpc_request)
+        
+        return jsonify({
+            'post_id': response.post_id,
+            'views_count': response.views_count,
+            'likes_count': response.likes_count,
+            'comments_count': response.comments_count
+        }), 200
+    
+    except grpc.RpcError as e:
+        status_code = e.code()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/stats/posts/<int:post_id>/views/dynamics', methods=['GET'])
+def get_post_views_dynamics(post_id):
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+    
+    start_date = request.args.get('start_date', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
+    
+    try:
+        stub = get_stats_service_stub()
+        grpc_request = stats_service_pb2.PostDynamicsRequest(
+            post_id=post_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        response = stub.GetPostViewsDynamics(grpc_request)
+        
+        daily_stats = []
+        for stat in response.daily_stats:
+            daily_stats.append({
+                'date': stat.date,
+                'count': stat.count
+            })
+        
+        return jsonify({
+            'post_id': response.post_id,
+            'daily_stats': daily_stats
+        }), 200
+    
+    except grpc.RpcError as e:
+        status_code = e.code()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/stats/posts/<int:post_id>/likes/dynamics', methods=['GET'])
+def get_post_likes_dynamics(post_id):
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+    
+    start_date = request.args.get('start_date', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
+    
+    try:
+        stub = get_stats_service_stub()
+        grpc_request = stats_service_pb2.PostDynamicsRequest(
+            post_id=post_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        response = stub.GetPostLikesDynamics(grpc_request)
+        
+        daily_stats = []
+        for stat in response.daily_stats:
+            daily_stats.append({
+                'date': stat.date,
+                'count': stat.count
+            })
+        
+        return jsonify({
+            'post_id': response.post_id,
+            'daily_stats': daily_stats
+        }), 200
+    
+    except grpc.RpcError as e:
+        try:
+            status_code = e.code()
+        except AttributeError:
+            status_code = e._code
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/stats/posts/<int:post_id>/comments/dynamics', methods=['GET'])
+def get_post_comments_dynamics(post_id):
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+    
+    start_date = request.args.get('start_date', (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
+    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
+    
+    try:
+        stub = get_stats_service_stub()
+        grpc_request = stats_service_pb2.PostDynamicsRequest(
+            post_id=post_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        response = stub.GetPostCommentsDynamics(grpc_request)
+        
+        daily_stats = []
+        for stat in response.daily_stats:
+            daily_stats.append({
+                'date': stat.date,
+                'count': stat.count
+            })
+        
+        return jsonify({
+            'post_id': response.post_id,
+            'daily_stats': daily_stats
+        }), 200
+    
+    except grpc.RpcError as e:
+        try:
+            status_code = e.code()
+        except AttributeError:
+            status_code = e._code
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/stats/top/posts', methods=['GET'])
+def get_top_posts():
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+
+    metric_type_str = request.args.get('metric_type', 'views').lower()
+    limit = request.args.get('limit', 10, type=int)
+
+    metric_type_map = {
+        'views': stats_service_pb2.TopRequest.MetricType.VIEWS,
+        'likes': stats_service_pb2.TopRequest.MetricType.LIKES,
+        'comments': stats_service_pb2.TopRequest.MetricType.COMMENTS
+    }
+    
+    if metric_type_str not in metric_type_map:
+        return jsonify({'error': 'Invalid metric_type. Must be one of: views, likes, comments'}), 400
+    
+    metric_type = metric_type_map[metric_type_str]
+    
+    try:
+        stub = get_stats_service_stub()
+        grpc_request = stats_service_pb2.TopRequest(
+            metric_type=metric_type,
+            limit=limit
+        )
+        
+        response = stub.GetTopPosts(grpc_request)
+        
+        posts = []
+        for post in response.posts:
+            posts.append({
+                'post_id': post.post_id,
+                'count': post.count
+            })
+        
+        return jsonify({
+            'metric_type': metric_type_str,
+            'posts': posts
+        }), 200
+    
+    except grpc.RpcError as e:
+        try:
+            status_code = e.code()
+        except AttributeError:
+            status_code = e._code
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/stats/top/users', methods=['GET'])
+def get_top_users():
+    user_data, error, status_code = authenticate_user(request)
+    if error:
+        return jsonify(error), status_code
+
+    metric_type_str = request.args.get('metric_type', 'views').lower()
+    limit = request.args.get('limit', 10, type=int)
+
+    metric_type_map = {
+        'views': stats_service_pb2.TopRequest.MetricType.VIEWS,
+        'likes': stats_service_pb2.TopRequest.MetricType.LIKES,
+        'comments': stats_service_pb2.TopRequest.MetricType.COMMENTS
+    }
+    
+    if metric_type_str not in metric_type_map:
+        return jsonify({'error': 'Invalid metric_type. Must be one of: views, likes, comments'}), 400
+    
+    metric_type = metric_type_map[metric_type_str]
+    
+    try:
+        stub = get_stats_service_stub()
+        grpc_request = stats_service_pb2.TopRequest(
+            metric_type=metric_type,
+            limit=limit
+        )
+        
+        response = stub.GetTopUsers(grpc_request)
+        
+        users = []
+        for user in response.users:
+            users.append({
+                'user_id': user.user_id,
+                'count': user.count
+            })
+        
+        return jsonify({
+            'metric_type': metric_type_str,
+            'users': users
+        }), 200
+    
+    except grpc.RpcError as e:
+        try:
+            status_code = e.code()
+        except AttributeError:
+            status_code = e._code
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
