@@ -15,19 +15,18 @@ class ClickHouseClient:
     
     def connect(self):
         try:
-            temp_client = clickhouse_driver.Client(
+            temp_client = clickhouse_connect.get_client(
                 host=self.host,
                 port=self.port,
-                user=self.user,
+                username=self.user,
                 password=self.password
             )
+            temp_client.command('CREATE DATABASE IF NOT EXISTS stats')
 
-            temp_client.execute('CREATE DATABASE IF NOT EXISTS stats')
-            
-            self.client = clickhouse_driver.Client(
+            self.client = clickhouse_connect.get_client(
                 host=self.host,
                 port=self.port,
-                user=self.user,
+                username=self.user,
                 password=self.password,
                 database=self.database
             )
@@ -45,11 +44,11 @@ class ClickHouseClient:
         try:
             if params:
                 if query.strip().upper().startswith('INSERT'):
-                    result = self.client.insert(
-                        table=query.split('INTO')[1].split('(')[0].strip(),
-                        data=params,
-                        column_names=query.split('(')[1].split(')')[0].split(',')
-                    )
+                    table_name = query.split('INTO')[1].split('(')[0].strip()
+                    column_names = [col.strip() for col in query.split('(')[1].split(')')[0].split(',')]
+
+                    self.client.insert(table_name, params, column_names=column_names)
+                    return True
                 else:
                     result = self.client.query(query, parameters=params)
                     return result.result_rows
@@ -62,11 +61,11 @@ class ClickHouseClient:
                 try:
                     if params:
                         if query.strip().upper().startswith('INSERT'):
-                            result = self.client.insert(
-                                table=query.split('INTO')[1].split('(')[0].strip(),
-                                data=params,
-                                column_names=query.split('(')[1].split(')')[0].split(',')
-                            )
+                            table_name = query.split('INTO')[1].split('(')[0].strip()
+                            column_names = [col.strip() for col in query.split('(')[1].split(')')[0].split(',')]
+                            
+                            self.client.insert(table_name, params, column_names=column_names)
+                            return True
                         else:
                             result = self.client.query(query, parameters=params)
                             return result.result_rows
