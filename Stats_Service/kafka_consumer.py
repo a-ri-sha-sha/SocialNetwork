@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from clickhouse_client import ClickHouseClient
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -75,14 +76,17 @@ class KafkaConsumer:
             (user_id, post_id, view_time, event_time) 
             VALUES
             """
+
+            view_time = datetime.fromisoformat(data['view_time'])
+            event_time = datetime.fromisoformat(data['event_time'])
             
             values = (
                 data['user_id'],
                 data['post_id'],
-                data['view_time'],
-                data['event_time']
+                view_time,
+                event_time
             )
-            
+
             self.clickhouse_client.execute_query(query, [values])
             logger.info(f"Saved view event: post_id={data['post_id']}, user_id={data['user_id']}")
         
@@ -96,15 +100,18 @@ class KafkaConsumer:
             (user_id, post_id, is_like, like_time, event_time) 
             VALUES
             """
+
+            like_time = datetime.fromisoformat(data.get('like_time', datetime.utcnow().isoformat()))
+            event_time = datetime.fromisoformat(data.get('event_time', datetime.utcnow().isoformat()))
             
             values = (
-                data['user_id'],
-                data['post_id'],
+                int(data['user_id']),
+                int(data['post_id']),
                 1 if data['is_like'] else 0,
-                data['like_time'],
-                data['event_time']
+                like_time,
+                event_time
             )
-            
+
             self.clickhouse_client.execute_query(query, [values])
             logger.info(f"Saved like event: post_id={data['post_id']}, user_id={data['user_id']}, is_like={data['is_like']}")
         
@@ -118,13 +125,15 @@ class KafkaConsumer:
             (user_id, post_id, comment_id, comment_time, event_time) 
             VALUES
             """
+            comment_time = datetime.fromisoformat(data.get('comment_time', datetime.utcnow().isoformat()))
+            event_time = datetime.fromisoformat(data.get('event_time', datetime.utcnow().isoformat()))
             
             values = (
-                data['user_id'],
-                data['post_id'],
-                data['comment_id'],
-                data['comment_time'],
-                data['event_time']
+                int(data['user_id']),
+                int(data['post_id']),
+                int(data['comment_id']),
+                comment_time,
+                event_time
             )
             
             self.clickhouse_client.execute_query(query, [values])

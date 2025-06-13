@@ -9,7 +9,7 @@ class ClickHouseClient:
         self.host = os.environ.get('CLICKHOUSE_HOST', 'clickhouse')
         self.port = int(os.environ.get('CLICKHOUSE_HTTP_PORT', 8123))
         self.user = os.environ.get('CLICKHOUSE_USER', 'default')
-        self.password = os.environ.get('CLICKHOUSE_PASSWORD', '')
+        self.password = os.environ.get('CLICKHOUSE_PASSWORD', '123456')
         self.database = 'stats'
         self.client = None
     
@@ -19,7 +19,8 @@ class ClickHouseClient:
                 host=self.host,
                 port=self.port,
                 username=self.user,
-                password=self.password
+                password=self.password,
+                connect_timeout=30
             )
             temp_client.command('CREATE DATABASE IF NOT EXISTS stats')
 
